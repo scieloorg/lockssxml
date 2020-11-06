@@ -124,7 +124,7 @@ def json2xml(ipidlist):
                     # journal title
                     if hasattr(issue.journal, 'acronym') and title:
                         acronym = issue.journal.acronym
-                        journal_title = Element('property', name='journalTitle', value='%s. %s' % (acronym.upper(), title))
+                        journal_title = Element('property', name='journalTitle', value='%s-%s' % (acronym.upper(), title))
                         scieloplugin.append(journal_title)
 
                     # ISSN
@@ -141,7 +141,7 @@ def json2xml(ipidlist):
                     scieloplugin.append(type)
 
                     # title
-                    title_element = Element('property', name="title", value='%s. %s Volume %s' % (acronym.upper(), title, volume))
+                    title_element = Element('property', name="title", value='%s-%s Volume %s' % (acronym.upper(), title, volume))
                     scieloplugin.append(title_element)
 
                     plugin = Element('property', name="plugin", value='org.lockss.plugin.scielo.ClockssSciELOPlugin')
