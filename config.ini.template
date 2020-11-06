@@ -1,0 +1,19 @@
+[paths]
+# File name of list of sbid for generate XMLs [required]
+pidlistname = pids.txt
+
+# Folder name for xml file output [required]
+xmlfoldername = output
+
+# XML file name output [optional]
+xmlfilename = titledb
+
+# To prefix file name with date iso format (yes/no) [required]
+prefix = yes
+
+[articlemeta]
+# Host of SciELO Articlemeta [required]
+host =
+
+# Collection acronym
+col = 
