@@ -17,3 +17,7 @@ host =
 
 # Collection acronym
 col = 
+
+[output]
+# Output format file
+output_format = xml
