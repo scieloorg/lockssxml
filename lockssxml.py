@@ -1,5 +1,5 @@
 # coding: utf-8
-import configparser
+import argparse
 import datetime
 import os
 import sys
@@ -13,6 +13,8 @@ from lxml import etree
 import logging
 import requests
 
+LOG_FORMAT = '%(asctime)s %(name)s %(levelname)s %(message)s'
+LOG_LEVEL = logging.DEBUG
 
 # Check and create logs directory
 if not os.path.exists('logs'):
@@ -23,16 +25,6 @@ logger = logging.getLogger(__name__)
 
 # Format ISO date
 dateiso = datetime.datetime.now().strftime('%Y%m%d')
-
-# Read config
-config = configparser.ConfigParser()
-config.read('config.ini')
-
-# Host and base path to Articlemeta API
-host = config['articlemeta']['host']
-
-# Collection acronym
-col = config['articlemeta']['col']
 
 
 def accent_remover(text):
@@ -46,28 +38,19 @@ def accent_remover(text):
     return re.sub('[^a-zA-Z0-9]', '', text_norm)
 
 
-def request_issue(ipid):
+def request_issue(host, col, ipid):
     # Request issues
     jsondocs = {}
-    try:
-        url = ('%sissue/?collection=%s&code=%s' % (host, col, ipid))
-        # print(url)
-        logger.info(url)
-        r = requests.get(url)
-        if r.status_code == 200:
-            jsondocs = r.json()
-            r.close()
-    except requests.ConnectionError as e:
-        msg = ('request_error|status_code:%s|pid:%s|erro:%s' %
-               (r.status_code, ipid, e))
-        logger.info(msg)
-        print(msg)
-        jsondocs = {}
-
+    url = ('%sissue/?collection=%s&code=%s' % (host, col, ipid))
+    logger.info(url)
+    r = requests.get(url)
+    if r.status_code == 200:
+        jsondocs = r.json()
+        r.close()
     return jsondocs
 
 
-def json2xml(ipidlist):
+def json2xml(host, col, base_url, ipidlist):
     # lockss-config elements
     lockss_config = Element('lockss-config')
 
@@ -96,7 +79,7 @@ def json2xml(ipidlist):
     journal_issues = {}
     for ipid in ipidlist:
         try:
-            ijson = request_issue(ipid)
+            ijson = request_issue(host, col, ipid)
             if ijson:
                 # Xylose
                 issue = Issue(ijson)
@@ -154,9 +137,14 @@ def json2xml(ipidlist):
                                        value=issue.journal.scielo_issn)
                         scieloplugin.append(issn)
                     # Electronic issn
-                    if hasattr(issue.journal, 'electronic_issn'):
+                    check_eissn= getattr(issue.journal, 'electronic_issn')
+                    if check_eissn is not None:
                         eissn = Element('property', name="eissn",
                                         value=issue.journal.electronic_issn)
+                        scieloplugin.append(eissn)
+                    else:
+                        eissn = Element('property', name="eissn",
+                                        value="")
                         scieloplugin.append(eissn)
 
                     # type
@@ -182,7 +170,7 @@ def json2xml(ipidlist):
                     key1 = Element('property', name='key', value='base_url')
                     param1.append(key1)
                     value1 = Element('property', name='value',
-                                     value=config['params']['base_url'])
+                                     value=base_url)
                     param1.append(value1)
 
                     # Param2
@@ -207,7 +195,7 @@ def json2xml(ipidlist):
         except Exception as e:
             print(e)
             logger.info(e)
-            continue
+            # continue
 
     # Generates the XML
     return etree.tostring(lockss_config,
@@ -216,7 +204,7 @@ def json2xml(ipidlist):
                           encoding='utf-8')
 
 
-def json2csv(ipidlist):
+def json2csv(host, col, ipidlist):
     """
     output: 
             [{'publisher': 'SciELO', 'journal': 'Acta Amazonica',
@@ -230,7 +218,7 @@ def json2csv(ipidlist):
         data_dict = {}
         flag = False
         try:
-            ijson = request_issue(ipid)
+            ijson = request_issue(host, col, ipid)
             if ijson:
                 # Xylose
                 issue = Issue(ijson)
@@ -257,61 +245,56 @@ def json2csv(ipidlist):
 
         except Exception as e:
             print(e)
-            logger.info(e)
-            continue
+            # logger.info(e)
+            # continue
 
     return data_list
 
 
-def main():
+def main(
+        outputdir, outputfile, prefix,
+        host, col,
+        base_url, output_format, pid_list
+):
     # Folder and file names
-    if config['paths']['pidlistname'] == '':
-        print('pidlistname=empty.\nEnter the PID list name in config.ini.')
-        sys.exit()
+    # if pidlistname == '':
+    #     print('pidlistname=empty.\nEnter the PID list name in config.ini.')
+    #     sys.exit()
 
-    xmlfilename = config['paths']['xmlfilename']
-
-    xmlfolder = config['paths']['xmlfoldername']
-
-    if config['paths']['prefix'] == 'yes':
-        if config['paths']['xmlfilename'] == '':
-            xmlfilename = dateiso
+    if prefix == 'yes':
+        if outputfile == '':
+            outputfile = dateiso
         else:
-            xmlfilename = ('%s_%s' % (dateiso, xmlfilename))
+            outputfile = ('%s_%s' % (dateiso, outputfile))
 
-    if config['paths']['prefix'] == 'no':
-        if config['paths']['xmlfilename'] == '':
-            print('xmlfilename = empty.\nEnter a name in config.ini.')
+    if prefix == 'no':
+        if outputfile == '':
+            print('outputfile = empty.\nEnter a name in config.ini.')
             exit()
 
-    if config['paths']['prefix'] == '':
-        if config['paths']['xmlfilename'] == '':
-            print('xmlfilename = empty.\nEnter a name in config.ini.')
+    if prefix == '':
+        if outputfile == '':
+            print('outputfile = empty.\nEnter a name in config.ini.')
             exit()
 
-    xmlout = ('%s/%s.xml' % (xmlfolder, xmlfilename))
+    # xmlout = ('%s/%s.xml' % (outputdir, outputfile))
 
-    print('\nfolder/xmlfile: %s\n' % xmlout)
+    # print('\nfolder/xmlfile: %s\n' % xmlout)
+    # import pdb; pdb.set_trace()
+    if output_format == 'xml':
 
-    # Issue PID List
-    with open(config['paths']['pidlistname']) as f:
-        pidlist = [line.strip()[1:18] for line in f]
-        # Distinct Issue List
-        ipidlist = sorted(list(set(pidlist)), reverse=True)
-    f.close()
-
-    if config['output']['output_format'] == 'xml':
-        xmlout = ('%s/%s.xml' % (xmlfolder, xmlfilename))
+        xmlout = ('%s/%s.xml' % (outputdir, outputfile))
 
         print('\nfolder/xmlfile: %s\n' % xmlout)
 
         # Build XML object
-        xmldocs = json2xml(ipidlist=ipidlist)
+        xmldocs = json2xml(host, col, base_url, pid_list)
+
 
         # Check and create xml folder output
         if xmldocs:
-            if not os.path.exists(xmlfolder):
-                os.mkdir(xmlfolder)
+            if not os.path.exists(outputdir):
+                os.mkdir(outputdir)
 
             # Write the XML file in folder
             with open(xmlout, encoding='utf-8-sig', mode='w') as f:
@@ -319,9 +302,10 @@ def main():
                 f.write(u'<?xml version="1.0" encoding="UTF-8"?>\n')
                 f.write(xmldocs.decode('utf-8'))
             f.close()
-    elif config['output']['output_format'] == 'csv':
+
+    elif output_format == 'csv':
         # Build CSV object
-        list_journal = json2csv(ipidlist=ipidlist)
+        list_journal = json2csv(host, col, pidlist)
         with open('out.csv', mode='w') as f:
             f.write(
                 "%s; %s; %s; %s; %s; %s; %s; %s\n" % (
@@ -347,4 +331,68 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-pidfile', help='File name of list of sbid for generate XMLs or CVS [required]',
+        default='pids.txt'
+    )
+    parser.add_argument(
+        '-outputdir', help='Folder name for save output generated file [required]',
+        default='output'
+    )
+    parser.add_argument(
+        '-outputfile', help='Give it a name for your generated file.',
+        default='titledb'
+    )
+    parser.add_argument(
+        '-prefix', help='To prefix file name with date iso format (yes/no) [required]',
+        default='yes'
+    )
+    parser.add_argument(
+        '-host', help='Host of SciELO Articlemeta API[required]',
+        default='http://articlemeta.scielo.org/api/v1/'
+    )
+    parser.add_argument(
+        '-col', help='Collection acronym name',
+        default='scl'
+    )
+    parser.add_argument(
+        '-base_url', help='URL used by LOCKSS to harvest',
+        default='http://www.scielo.br/'
+    )
+    parser.add_argument(
+        '-output_format', help='Output format file',
+        default='xml'
+    )
+    parser.add_argument(
+        '-o', dest='output', type=argparse.FileType('a'),
+        help='Output File', default=sys.stdout
+    )
+    parser.add_argument(
+        '-l', dest='log', type=str,
+        help='Log File', default=None
+    )
+    args = parser.parse_args()
+    if args.log:
+        logging.basicConfig(format=LOG_FORMAT, filename=args.log,
+                            level=LOG_LEVEL)
+    else:
+        logging.basicConfig(format=LOG_FORMAT, level=LOG_LEVEL)
+    try:
+        # Issue PID List
+        with open(args.pidfile) as f:
+            pidlist = [line.strip()[1:18] for line in f]
+            # Distinct Issue List
+            pid_list = sorted(list(set(pidlist)), reverse=True)
+        f.close()
+
+        main(args.outputdir, args.outputfile,
+             args.prefix, args.host,
+             args.col, args.base_url, args.output_format, pid_list
+             )
+    except Exception as exc:
+        logging.exception("Error running task")
+        exit(1)
+
+
+
